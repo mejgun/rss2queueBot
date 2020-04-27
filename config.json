@@ -1,0 +1,13 @@
+{
+    "Dir": "./queue/",
+    "ErrorChat": 99999999,
+    "Data": [
+        {
+            "Urls": [
+                "http://lineageos.org/feed.xml",
+                "https://twrp.me/feed.xml"
+            ],
+            "Chat": -1111111111111
+        }
+    ]
+}
