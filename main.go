@@ -141,10 +141,11 @@ func writeUrlsToDump() error {
 	return nil
 }
 
-func readConfig() (map[string]int64, string, int64) {
+func readConfig() (map[string]int64, string, int64, uint8) {
 	type Configuration struct {
 		Dir       string
 		ErrorChat int64
+		SleepTime uint8
 		Data      []struct {
 			Urls []string
 			Chat int64
@@ -166,14 +167,15 @@ func readConfig() (map[string]int64, string, int64) {
 			urls[u] = d.Chat
 		}
 	}
-	return urls, configuration.Dir, configuration.ErrorChat
+	return urls, configuration.Dir, configuration.ErrorChat, configuration.SleepTime
 }
 
 func main() {
 	var urlsAndChat map[string]int64
 	var dir string
 	var errorChat int64
-	urlsAndChat, dir, errorChat = readConfig()
+	var sleepTime uint8
+	urlsAndChat, dir, errorChat, sleepTime = readConfig()
 	sendedUrls = make(map[string][]string)
 	readUrlsFromDump()
 	for {
@@ -196,6 +198,6 @@ func main() {
 		}
 		writeUrlsToDump()
 		log.Print("sleep...")
-		time.Sleep(10 * time.Minute)
+		time.Sleep(time.Duration(sleepTime) * time.Minute)
 	}
 }

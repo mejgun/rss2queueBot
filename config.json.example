@@ -1,6 +1,7 @@
 {
     "Dir": "./queue/",
     "ErrorChat": 99999999,
+    "SleepTime": 15,
     "Data": [
         {
             "Urls": [
