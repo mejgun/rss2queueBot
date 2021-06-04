@@ -18,6 +18,8 @@ import (
 var sendedUrlsFile = "sendedUrls.gob"
 var sendedUrls map[string][]string
 
+const waitAfterErr = time.Duration(time.Second)
+
 // Queue struct
 type Queue struct {
 	Method  string `json:"method"`
@@ -114,6 +116,18 @@ func getFeed(url string) ([]*gofeed.Item, error) {
 	return nil, err
 }
 
+func tryGetFeed(url string, count uint) ([]*gofeed.Item, error) {
+	var i uint
+	for {
+		feed, err := getFeed(url)
+		if err == nil || i >= count {
+			return feed, err
+		}
+		i++
+		time.Sleep(waitAfterErr)
+	}
+}
+
 func readUrlsFromDump() error {
 	var r io.ReadCloser
 	r, _ = os.Open(sendedUrlsFile)
@@ -181,7 +195,7 @@ func main() {
 	for {
 		log.Print("get...")
 		for url, chat := range urlsAndChat {
-			items, err := getFeed(url)
+			items, err := tryGetFeed(url, 5)
 			if err == nil {
 				urls := sendNewItems(items, sendedUrls[url], dir, chat)
 				sendedUrls[url] = urls
