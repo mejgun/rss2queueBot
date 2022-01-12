@@ -106,9 +106,9 @@ func sendNewItems(items []*gofeed.Item, urls []string, dir string, chat int64) [
 	return urls
 }
 
-func getFeed(url string) ([]*gofeed.Item, error) {
+func getFeed(url string, timeout time.Duration) ([]*gofeed.Item, error) {
 	fp := gofeed.NewParser()
-	fp.Client = &http.Client{Timeout: 5 * time.Minute}
+	fp.Client = &http.Client{Timeout: timeout}
 	feed, err := fp.ParseURL(url)
 	if err == nil {
 		return feed.Items, nil
@@ -116,10 +116,10 @@ func getFeed(url string) ([]*gofeed.Item, error) {
 	return nil, err
 }
 
-func tryGetFeed(url string, count uint) ([]*gofeed.Item, error) {
+func tryGetFeed(url string, count uint, timeout time.Duration) ([]*gofeed.Item, error) {
 	var i uint
 	for {
-		feed, err := getFeed(url)
+		feed, err := getFeed(url, timeout)
 		if err == nil || i >= count {
 			return feed, err
 		}
@@ -155,11 +155,18 @@ func writeUrlsToDump() error {
 	return nil
 }
 
-func readConfig() (map[string]int64, string, int64, uint8) {
+func readConfig() (
+	map[string]int64,
+	string,
+	int64,
+	time.Duration,
+	time.Duration,
+) {
 	type Configuration struct {
 		Dir       string
 		ErrorChat int64
 		SleepTime uint8
+		TimeOut   uint8
 		Data      []struct {
 			Urls []string
 			Chat int64
@@ -167,13 +174,13 @@ func readConfig() (map[string]int64, string, int64, uint8) {
 	}
 	file, err := os.Open("config.json")
 	if err != nil {
-		log.Panic(err)
+		log.Fatal(err)
 	}
 	decoder := json.NewDecoder(file)
 	configuration := Configuration{}
 	err = decoder.Decode(&configuration)
 	if err != nil {
-		log.Panic(err)
+		log.Fatal(err)
 	}
 	var urls map[string]int64 = map[string]int64{}
 	for _, d := range configuration.Data {
@@ -181,21 +188,32 @@ func readConfig() (map[string]int64, string, int64, uint8) {
 			urls[u] = d.Chat
 		}
 	}
-	return urls, configuration.Dir, configuration.ErrorChat, configuration.SleepTime
+	if configuration.SleepTime == 0 {
+		configuration.SleepTime = 30
+	}
+	if configuration.TimeOut == 0 {
+		configuration.TimeOut = 10
+	}
+	return urls,
+		configuration.Dir,
+		configuration.ErrorChat,
+		time.Duration(configuration.SleepTime) * time.Minute,
+		time.Duration(configuration.TimeOut) * time.Minute
 }
 
 func main() {
 	var urlsAndChat map[string]int64
 	var dir string
 	var errorChat int64
-	var sleepTime uint8
-	urlsAndChat, dir, errorChat, sleepTime = readConfig()
+	var sleepTime time.Duration
+	var timeout time.Duration
+	urlsAndChat, dir, errorChat, sleepTime, timeout = readConfig()
 	sendedUrls = make(map[string][]string)
 	readUrlsFromDump()
 	for {
 		log.Print("get...")
 		for url, chat := range urlsAndChat {
-			items, err := tryGetFeed(url, 5)
+			items, err := tryGetFeed(url, 5, timeout)
 			if err == nil {
 				urls := sendNewItems(items, sendedUrls[url], dir, chat)
 				sendedUrls[url] = urls
@@ -212,6 +230,6 @@ func main() {
 		}
 		writeUrlsToDump()
 		log.Print("sleep...")
-		time.Sleep(time.Duration(sleepTime) * time.Minute)
+		time.Sleep(sleepTime)
 	}
 }
