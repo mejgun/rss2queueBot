@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	sendedUrlsFile = "sendedUrls.gob"
-	configFile     = "config.json"
+	sentUrlsFile = "sendedUrls.gob"
+	configFile   = "config.json"
 )
 
 // Queue struct
@@ -27,9 +27,9 @@ type Queue struct {
 	ChatID  int64  `json:"chat_id"`
 }
 
-func stringInMap(a string, list map[string]int64) bool {
-	for b := range list {
-		if b == a {
+func stringInList(a string, list []listItem) bool {
+	for _, b := range list {
+		if b.url == a {
 			return true
 		}
 	}
@@ -124,34 +124,34 @@ func tryGetFeed(url string, count uint, sleepTime, timeout time.Duration) ([]*go
 
 func readUrlsFromDump() (map[string][]string, error) {
 	var (
-		r          io.ReadCloser
-		err        error
-		sendedUrls map[string][]string
+		r        io.ReadCloser
+		err      error
+		sentUrls map[string][]string
 	)
-	r, err = os.Open(sendedUrlsFile)
+	r, err = os.Open(sentUrlsFile)
 	if err != nil {
-		return sendedUrls, err
+		return sentUrls, err
 	}
 	dec := gob.NewDecoder(r)
-	err = dec.Decode(&sendedUrls)
+	err = dec.Decode(&sentUrls)
 	if err != nil {
-		return sendedUrls, err
+		return sentUrls, err
 	}
-	return sendedUrls, r.Close()
+	return sentUrls, r.Close()
 }
 
-func writeUrlsToDump(sendedUrls map[string][]string) error {
+func writeUrlsToDump(sentUrls map[string][]string) error {
 	var (
 		w   io.WriteCloser
 		err error
 	)
-	w, err = os.Create(sendedUrlsFile)
+	w, err = os.Create(sentUrlsFile)
 	if err != nil {
 		log.Print("encode error :", err)
 		return err
 	}
 	enc := gob.NewEncoder(w)
-	err = enc.Encode(sendedUrls)
+	err = enc.Encode(sentUrls)
 	if err != nil {
 		log.Print("encode error :", err)
 		return err
@@ -159,8 +159,13 @@ func writeUrlsToDump(sendedUrls map[string][]string) error {
 	return w.Close()
 }
 
+type listItem struct {
+	url  string
+	chat int64
+}
+
 func readConfig() (
-	map[string]int64,
+	[]listItem,
 	string,
 	int64,
 	time.Duration,
@@ -198,7 +203,15 @@ func readConfig() (
 	if configuration.TimeOut == 0 {
 		configuration.TimeOut = 10
 	}
-	return urls,
+
+	var list []listItem
+	for k, v := range urls {
+		list = append(list, listItem{k, v})
+	}
+	slices.SortFunc(list, func(a, b listItem) int {
+		return strings.Compare(strings.ToLower(a.url), strings.ToLower(b.url))
+	})
+	return list,
 		configuration.Dir,
 		configuration.ErrorChat,
 		time.Duration(configuration.SleepSeconds) * time.Second,
@@ -206,35 +219,37 @@ func readConfig() (
 }
 
 func main() {
-	var urlsAndChat map[string]int64
-	var dir string
-	var errorChat int64
-	var sleepTime time.Duration
-	var timeout time.Duration
+	var (
+		urlsAndChat []listItem
+		dir         string
+		errorChat   int64
+		sleepTime   time.Duration
+		timeout     time.Duration
+	)
 	urlsAndChat, dir, errorChat, sleepTime, timeout = readConfig()
-	sendedUrls, err := readUrlsFromDump()
+	sentUrls, err := readUrlsFromDump()
 	if err != nil {
 		log.Fatalf("cannot read dump file: %s", err)
 	}
 	for {
 		log.Println("new round")
-		for url, chat := range urlsAndChat {
-			items, err := tryGetFeed(url, 5, sleepTime, timeout)
+		for _, i := range urlsAndChat {
+			items, err := tryGetFeed(i.url, 5, sleepTime, timeout)
 			if err == nil {
-				urls := sendNewItems(items, sendedUrls[url], dir, chat)
-				sendedUrls[url] = urls
-				log.Println(url, len(urls))
+				urls := sendNewItems(items, sentUrls[i.url], dir, i.chat)
+				sentUrls[i.url] = urls
+				log.Println(i.url, len(urls))
 			} else {
-				saveToFile(fmt.Sprintf("%s %s", url, err), dir, errorChat)
-				log.Println(url, err)
+				saveToFile(fmt.Sprintf("%s %s", i.url, err), dir, errorChat)
+				log.Println(i.url, err)
 			}
 		}
-		for key := range sendedUrls {
-			if !stringInMap(key, urlsAndChat) {
-				delete(sendedUrls, key)
+		for key := range sentUrls {
+			if !stringInList(key, urlsAndChat) {
+				delete(sentUrls, key)
 			}
 		}
-		if err := writeUrlsToDump(sendedUrls); err != nil {
+		if err := writeUrlsToDump(sentUrls); err != nil {
 			log.Fatalf("cannot dump urls to file: %s", err)
 		}
 	}
