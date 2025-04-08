@@ -132,12 +132,13 @@ func readUrlsFromDump() (map[string][]string, error) {
 	if err != nil {
 		return sentUrls, err
 	}
+	defer r.Close()
 	dec := gob.NewDecoder(r)
 	err = dec.Decode(&sentUrls)
 	if err != nil {
 		return sentUrls, err
 	}
-	return sentUrls, r.Close()
+	return sentUrls, nil
 }
 
 func writeUrlsToDump(sentUrls map[string][]string) error {
@@ -147,16 +148,16 @@ func writeUrlsToDump(sentUrls map[string][]string) error {
 	)
 	w, err = os.Create(sentUrlsFile)
 	if err != nil {
-		log.Print("encode error :", err)
 		return err
+
 	}
+	defer w.Close()
 	enc := gob.NewEncoder(w)
 	err = enc.Encode(sentUrls)
 	if err != nil {
-		log.Print("encode error :", err)
-		return err
+		return fmt.Errorf("encode error: %s", err)
 	}
-	return w.Close()
+	return nil
 }
 
 type listItem struct {
@@ -229,10 +230,12 @@ func main() {
 	urlsAndChat, dir, errorChat, sleepTime, timeout = readConfig()
 	sentUrls, err := readUrlsFromDump()
 	if err != nil {
-		log.Fatalf("cannot read dump file: %s", err)
+		log.Printf("cannot read dump file: %s, ignoring", err)
 	}
+	started := time.Now()
 	for {
-		log.Println("new round")
+		log.Printf("new round, last = %s", time.Since(started))
+		started = time.Now()
 		for _, i := range urlsAndChat {
 			items, err := tryGetFeed(i.url, 5, sleepTime, timeout)
 			if err == nil {
