@@ -1,8 +1,6 @@
 module rss2queue
 
-go 1.23.0
-
-toolchain go1.23.6
+go 1.25.0
 
 require github.com/mmcdole/gofeed v1.3.0
 
@@ -13,6 +11,6 @@ require (
 	github.com/mmcdole/goxpp v1.1.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/text v0.24.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 )
